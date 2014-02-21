@@ -1,12 +1,19 @@
 HarmonyHubControl
 =========
 
-A Qt-based C++ executable to control the Logitech Harmony Hub/Link 
-without need of the Logitech Harmony App or Remote.
+A C++ executable to control the Logitech Harmony Hub/Link without need of 
+the Logitech Harmony App or Remote.
 
 HarmonyHubControl was developed using the pyharmony library as a guide.  
-It was written in C++ using Qt to allow simpler packaging than pyharmony
-and to reduce the number of dependencies.
+It was originally written in C++ using Qt to allow simpler packaging 
+than pyharmony and to reduce the number of dependencies.  Subsequently,
+the Qt dependency was removed so that it is now only dependent on BSD 
+sockets.
+
+The code has been compiled and tested on both Microsoft Windows (using
+Visual Studio 2010) and Ubuntu 10.0.  The code has also been cross-compiled
+to OpenWRT (backfire) and tested on Vera2 and VeraLite home automation 
+controllers.
 
 HarmonyHubControl was developed particularly to ease Harmony Hub/Link 
 integration within home automation systems.
@@ -42,7 +49,6 @@ without requiring the Logitech Harmony App or Remote.
 * Request a list of activities and devices from the harmony
 * Request the currently selected activity
 * Start an activity by ID
-
 
 
 Requirements
@@ -99,16 +105,11 @@ For full argument information simply run the executablewith no parameters.
 Building from Source
 --------------------
 
-Building the executable from source requires an install of Qt. The only version tested is 5.2.0 on 
-Microsoft Visual Studio 2010 on Windows (x86)
+Building the executable from source requires either Microsoft Visual Studio 2010 or Linux and gcc 
+3.4.x or above.
 
-Once Qt is installed, a visual studio project file can be generated using qmake:
-
-	qmake -tp vc HarmonyHubControl.pro
-
-The application has no dependencies beside Qt, therefore Qmake should configure the project file 
-automatically to allow compiling and running the application.  
-
+The application has no external dependencies besides the standard libraries provided by a default 
+Visual Studio or Linux gcc development environment.
 
 
 To-do
