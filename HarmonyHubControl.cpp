@@ -16,17 +16,119 @@
   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
   SOFTWARE.
-
 */
-#include <QtWidgets>
-#include <QtNetwork>
+
+#include <algorithm>
+#include <string>
+#include <map>
+#include "csocket.h"
 
 std::string errorString;
 std::string resultString;
 
 #define LOGITECH_AUTH_URL "https://svcs.myharmony.com/CompositeSecurityServices/Security.svc/json/GetUserAuthToken"
+#define LOGITECH_AUTH_HOSTNAME "svcs.myharmony.com"
+#define LOGITECH_AUTH_PATH "/CompositeSecurityServices/Security.svc/json/GetUserAuthToken"
 #define HARMONY_COMMUNICATION_PORT 5222
 #define CONNECTION_ID "12345678-1234-5678-1234-123456789012-1"
+
+#include <iostream>
+
+static const std::string base64_chars = 
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "0123456789+/";
+
+char databuffer[1000000];
+
+static inline bool is_base64(unsigned char c) {
+    return (isalnum(c) || (c == '+') || (c == '/'));
+}
+
+std::string base64_encode(char const* bytes_to_encode, unsigned int in_len) {
+    std::string ret;
+    int i = 0;
+    int j = 0;
+    unsigned char char_array_3[3];
+    unsigned char char_array_4[4];
+
+    while (in_len--) {
+        char_array_3[i++] = *(bytes_to_encode++);
+        if (i == 3) {
+            char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+            char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+            char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+            char_array_4[3] = char_array_3[2] & 0x3f;
+
+            for(i = 0; (i <4) ; i++)
+                ret += base64_chars[char_array_4[i]];
+            i = 0;
+        }
+    }
+
+    if (i)
+    {
+        for(j = i; j < 3; j++)
+            char_array_3[j] = '\0';
+
+        char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+        char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+        char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+        char_array_4[3] = char_array_3[2] & 0x3f;
+
+        for (j = 0; (j < i + 1); j++)
+            ret += base64_chars[char_array_4[j]];
+
+        while((i++ < 3))
+            ret += '=';
+
+    }
+
+    return ret;
+
+}
+
+std::string base64_decode(std::string const& encoded_string) {
+    int in_len = encoded_string.size();
+    int i = 0;
+    int j = 0;
+    int in_ = 0;
+    unsigned char char_array_4[4], char_array_3[3];
+    std::string ret;
+
+    while (in_len-- && ( encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
+        char_array_4[i++] = encoded_string[in_]; in_++;
+        if (i ==4) {
+            for (i = 0; i <4; i++)
+                char_array_4[i] = base64_chars.find(char_array_4[i]);
+
+            char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+            char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+            char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+
+            for (i = 0; (i < 3); i++)
+                ret += char_array_3[i];
+            i = 0;
+        }
+    }
+
+    if (i) {
+        for (j = i; j <4; j++)
+            char_array_4[j] = 0;
+
+        for (j = 0; j <4; j++)
+            char_array_4[j] = base64_chars.find(char_array_4[j]);
+
+        char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+        char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+        char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+
+        for (j = 0; (j < i - 1); j++) ret += char_array_3[j];
+    }
+
+    return ret;
+}
+
 
 //  Logs into the Logitech Harmony web service
 //  Returns a base64-encoded string containing a 48-byte Login Token in the third parameter
@@ -38,56 +140,55 @@ int harmonyWebServiceLogin(std::string strUserEmail, std::string strPassword, st
         return 1;
     } 
 
+
     // Build JSON request
-    QByteArray jsonString = "{\"email\":\"";
-    jsonString.append(strUserEmail.c_str());
-    jsonString.append("\",\"password\":\"");
-    jsonString.append(strPassword.c_str());
-    jsonString.append("\"}");
+    std::string strJSONText = "{\"email\":\"";
+    strJSONText.append(strUserEmail.c_str());
+    strJSONText.append("\",\"password\":\"");
+    strJSONText.append(strPassword.c_str());
+    strJSONText.append("\"}");
 
-    QByteArray postDataSize = QByteArray::number(jsonString.size());
+    std::string strHttpPayloadText;
 
-    
-    QUrl serviceURL(LOGITECH_AUTH_URL);
-    QNetworkRequest request(serviceURL);
-    
-    request.setRawHeader("content-type", "application/json;charset=utf-8");
-    request.setRawHeader("content-length", postDataSize);
+    csocket authcsocket;
+    authcsocket.connect("svcs.myharmony.com", 80);
 
-    QNetworkAccessManager networkManager;
-
-    // Post the request and wait for a reply synchronously
-    QEventLoop eventLoop;
-    eventLoop.connect(&networkManager, SIGNAL(finished(QNetworkReply*)), SLOT(quit()));
-
-    QNetworkReply * reply = networkManager.post(request, jsonString);
-    eventLoop.exec(QEventLoop::AllEvents|QEventLoop::WaitForMoreEvents);
-
-    // Check for errors in the response
-    if (reply->error() != QNetworkReply::NoError)
+    if (authcsocket.getState() != csocket::CONNECTED)
     {
-        errorString = "harmonyWebServiceLogin : Error in reply from Logitech web service";
-        return 1;  
+        errorString = "harmonyWebServiceLogin : Unable to connect to Logitech server";
+        return 1;
     }
 
-    // Read the response text
-    std::string strResponseText = ((QString) reply->readAll()).toStdString();
-    if(strResponseText.length() == 0)
-    {
-        errorString = "harmonyWebServiceLogin : Empty login response Logitech web service";
-        return 1;  
-    }
-    
+    char contentLength[32];
+    sprintf( contentLength, "%d", strJSONText.length() );
+
+    std::string strHttpRequestText;
+
+    strHttpRequestText = "POST ";
+    strHttpRequestText.append(LOGITECH_AUTH_URL);
+    strHttpRequestText.append(" HTTP/1.1\r\nHost: ");
+    strHttpRequestText.append(LOGITECH_AUTH_HOSTNAME);
+    strHttpRequestText.append("\r\nAccept-Encoding: identity\r\nContent-Length: ");
+    strHttpRequestText.append(contentLength);
+    strHttpRequestText.append("\r\ncontent-type: application/json;charset=utf-8\r\n\r\n");
+
+    authcsocket.write(strHttpRequestText.c_str(), strHttpRequestText.size());
+    authcsocket.write(strJSONText.c_str(), strJSONText.length());
+
+    memset(databuffer, 0, 1000000);
+    authcsocket.read(databuffer, 1000000, false);
+    strHttpPayloadText = databuffer;/* <- Expect: 0x00def280 "HTTP/1.1 200 OK Server: nginx/1.2.4 Date: Wed, 05 Feb 2014 17:52:13 GMT Content-Type: application/json; charset=utf-8 Content-Length: 127 Connection: keep-alive Cache-Control: private X-AspNet-Version: 4.0.30319 X-Powered-By: ASP.NET  {"GetUserAuthTokenResult":{"AccountId":0,"UserAuthToken":"KsRE6VVA3xrhtbqFbh0jWn8YTiweDeB\/b94Qeqf3ofWGM79zLSr62XQh8geJxw\/V"}}"*/
+
     // Parse the login authorization token from the response
     std::string strAuthTokenTag = "UserAuthToken\":\"";
-    int pos = (int)strResponseText.find(strAuthTokenTag);
-    if(pos == std::wstring::npos)
+    int pos = (int)strHttpPayloadText.find(strAuthTokenTag);
+    if(pos == std::string::npos)
     {
         errorString = "harmonyWebServiceLogin : Logitech web service response does not contain a login authorization token";
         return 1;  
     }
 
-    strAuthorizationToken = strResponseText.substr(pos + strAuthTokenTag.length());
+    strAuthorizationToken = strHttpPayloadText.substr(pos + strAuthTokenTag.length());
     pos = (int)strAuthorizationToken.find("\"}}");
     strAuthorizationToken = strAuthorizationToken.substr(0, pos);
 
@@ -96,7 +197,7 @@ int harmonyWebServiceLogin(std::string strUserEmail, std::string strPassword, st
     return 0;
 }
 
-int connectToHarmony(std::string strHarmonyIPAddress, int harmonyPortNumber, QTcpSocket& harmonyCommunicationSocket)
+int connectToHarmony(std::string strHarmonyIPAddress, int harmonyPortNumber, csocket& harmonyCommunicationcsocket)
 {
     if(strHarmonyIPAddress.length() == 0 || harmonyPortNumber == 0 || harmonyPortNumber > 65535)
     {
@@ -104,10 +205,9 @@ int connectToHarmony(std::string strHarmonyIPAddress, int harmonyPortNumber, QTc
         return 1;
     }
 
-    harmonyCommunicationSocket.connectToHost(strHarmonyIPAddress.c_str(), harmonyPortNumber);
-    harmonyCommunicationSocket.waitForConnected();
+    harmonyCommunicationcsocket.connect(strHarmonyIPAddress.c_str(), harmonyPortNumber);
 
-    if (harmonyCommunicationSocket.state() != QAbstractSocket::ConnectedState)
+    if (harmonyCommunicationcsocket.getState() != csocket::CONNECTED)
     {
         errorString = "connectToHarmony : Unable to connect to specified IP Address on specified Port";
         return 1;
@@ -116,36 +216,35 @@ int connectToHarmony(std::string strHarmonyIPAddress, int harmonyPortNumber, QTc
     return 0;
 }
 
-int startCommunication(QTcpSocket* communicationSocket, std::string strUserName, std::string strPassword)
+int startCommunication(csocket* communicationcsocket, std::string strUserName, std::string strPassword)
 {
-    if(communicationSocket == NULL || strUserName.length() == 0 || strPassword.length() == 0)
+    if(communicationcsocket == NULL || strUserName.length() == 0 || strPassword.length() == 0)
     {
         errorString = "startCommunication : Invalid communication parameter(s) provided";
         return 1;
     } 
 
     // Start communication
-    QByteArray data = "<stream:stream to='connect.logitech.com' xmlns:stream='http://etherx.jabber.org/streams' xmlns='jabber:client' xml:lang='en' version='1.0'>";
-    communicationSocket->write(data);
-    communicationSocket->waitForBytesWritten(data.length());
-    communicationSocket->waitForReadyRead();
-    data = communicationSocket->readAll();
-
-    std::string strData = ((QString) data).toStdString(); /* <- Expect: <?xml version='1.0' encoding='iso-8859-1'?><stream:stream from='' id='XXXXXXXX' version='1.0' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams'><stream:features><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism></mechanisms></stream:features> */
+    std::string data = "<stream:stream to='connect.logitech.com' xmlns:stream='http://etherx.jabber.org/streams' xmlns='jabber:client' xml:lang='en' version='1.0'>";
+    communicationcsocket->write(data.c_str(), data.length());
+    memset(databuffer, 0, 1000000);
+    communicationcsocket->read(databuffer, 1000000, false);
+    
+    std::string strData = databuffer;/* <- Expect: <?xml version='1.0' encoding='iso-8859-1'?><stream:stream from='' id='XXXXXXXX' version='1.0' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams'><stream:features><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism></mechanisms></stream:features> */
 
     data = "<auth xmlns=\"urn:ietf:params:xml:ns:xmpp-sasl\" mechanism=\"PLAIN\">";
-    QByteArray tmp = QString('\0' + QString(strUserName.c_str()) + '\0' + QString(strPassword.c_str())).toUtf8();
-    data.append(tmp.toBase64());
+    std::string tmp = "\0";
+    tmp.append(strUserName);
+    tmp.append("\0");
+    tmp.append(strPassword);
+    data.append(base64_encode(tmp.c_str(), tmp.length()));
     data.append("</auth>");
-    communicationSocket->write(data);
-    communicationSocket->waitForBytesWritten(data.length());
-    communicationSocket->flush();
-
-    communicationSocket->waitForReadyRead();
-    data = communicationSocket->readAll();
-    communicationSocket->flush();
-
-    strData = ((QString) data).toStdString(); /* <- Expect: <success xmlns='urn:ietf:params:xml:ns:xmpp-sasl'/> */
+    communicationcsocket->write(data.c_str(), data.length());
+    
+    memset(databuffer, 0, 1000000);
+    communicationcsocket->read(databuffer, 1000000, false);
+    
+    strData = databuffer; /* <- Expect: <success xmlns='urn:ietf:params:xml:ns:xmpp-sasl'/> */
     if(strData != "<success xmlns='urn:ietf:params:xml:ns:xmpp-sasl'/>")
     {
         errorString = "startCommunication : connection error";
@@ -153,34 +252,33 @@ int startCommunication(QTcpSocket* communicationSocket, std::string strUserName,
     } 
 
     data = "<stream:stream to='connect.logitech.com' xmlns:stream='http://etherx.jabber.org/streams' xmlns='jabber:client' xml:lang='en' version='1.0'>";
-    communicationSocket->write(data);
-    communicationSocket->waitForBytesWritten(data.length());
-    communicationSocket->waitForReadyRead();
-    data = communicationSocket->readAll();
+    communicationcsocket->write(data.c_str(), data.length());
+    
+    memset(databuffer, 0, 1000000);
+    communicationcsocket->read(databuffer, 1000000, false);
 
-    strData = ((QString) data).toStdString(); /* <- Expect: <?xml version='1.0' encoding='iso-8859-1'?><stream:stream from='' id='057a30bd' version='1.0' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams'><stream:features><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism></mechanisms></stream:features> */
+    strData = databuffer; /* <- Expect: <?xml version='1.0' encoding='iso-8859-1'?><stream:stream from='' id='057a30bd' version='1.0' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams'><stream:features><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism></mechanisms></stream:features> */
 
     return 0;
 }
 
-int swapAuthorizationToken(QTcpSocket* authorizationSocket, std::string& strAuthorizationToken)
+int swapAuthorizationToken(csocket* authorizationcsocket, std::string& strAuthorizationToken)
 {
-    if(authorizationSocket == NULL || strAuthorizationToken.length() == 0)
+    if(authorizationcsocket == NULL || strAuthorizationToken.length() == 0)
     {
-        errorString = "swapAuthorizationToken : NULL socket or empty authorization token provided";
+        errorString = "swapAuthorizationToken : NULL csocket or empty authorization token provided";
         return 1;
     }
 
-    if(startCommunication(authorizationSocket, "guest", "gatorade.") != 0)
+    if(startCommunication(authorizationcsocket, "guest", "gatorade.") != 0)
     {
         errorString = "swapAuthorizationToken : Communication failure";
         return 1;
     }
 
     std::string strData;
-    QByteArray sendData;
-    QByteArray recvData;
-
+    std::string sendData;
+    
     // GENERATE A LOGIN ID REQUEST USING THE HARMONY ID AND LOGIN AUTHORIZATION TOKEN 
     sendData = "<iq type=\"get\" id=\"";
     sendData.append(CONNECTION_ID);
@@ -189,33 +287,39 @@ int swapAuthorizationToken(QTcpSocket* authorizationSocket, std::string& strAuth
     sendData.append(":name=foo#iOS6.0.1#iPhone</oa></iq>");
 
     std::string strIdentityTokenTag = "identity=";
-    int pos = std::wstring::npos;
+    int pos = std::string::npos;
     
-    authorizationSocket->write(sendData);
-    authorizationSocket->waitForBytesWritten(sendData.length());
+    authorizationcsocket->write(sendData.c_str(), sendData.length());
     
-    authorizationSocket->waitForReadyRead();
-    recvData = authorizationSocket->readAll();
-    authorizationSocket->flush();
+    memset(databuffer, 0, 1000000);
+    authorizationcsocket->read(databuffer, 1000000, false);
         
-    strData = ((QString) recvData).toStdString(); /* <- Expect: <iq/> */
+    strData = databuffer; /* <- Expect: <iq/> ... <success xmlns= ... identity=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX:status=succeeded ... */
 
-    if(strData != "<iq/>")
+    if(strData.find("<iq/>") != 0)
     {
-        errorString = "swapAuthorizationToken : Invalid Harmony response";
-        return 1;  
+         errorString = "swapAuthorizationToken : Invalid Harmony response";
+         return 1;  
     }
 
-    authorizationSocket->waitForReadyRead();
-    recvData = authorizationSocket->readAll();
-    authorizationSocket->flush();
+    bool bIsDataReadable = false;
+    authorizationcsocket->canRead(&bIsDataReadable, 1);
+    if(!bIsDataReadable && strData == "<iq/>")
+    {
+        bIsDataReadable = true;
+    }
 
-                                                                                                
-    strData = ((QString) recvData).toStdString(); /* <- Expect: <success xmlns= ... identity=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX:status=succeeded ... */
+    while(bIsDataReadable)
+    {
+        memset(databuffer, 0, 1000000);
+        authorizationcsocket->read(databuffer, 1000000, false);
+        strData.append(databuffer);
+        authorizationcsocket->canRead(&bIsDataReadable, 1);
+    };
 
     // Parse the session authorization token from the response
     pos = (int)strData.find(strIdentityTokenTag);
-    if(pos == std::wstring::npos)
+    if(pos == std::string::npos)
     {
         errorString = "swapAuthorizationToken : Logitech Harmony response does not contain a session authorization token";
         return 1;  
@@ -224,7 +328,7 @@ int swapAuthorizationToken(QTcpSocket* authorizationSocket, std::string& strAuth
     strAuthorizationToken = strData.substr(pos + strIdentityTokenTag.length());
 
     pos = (int)strAuthorizationToken.find(":status=succeeded");
-    if(pos == std::wstring::npos)
+    if(pos == std::string::npos)
     {
         errorString = "swapAuthorizationToken : Logitech Harmony response does not contain a valid session authorization token";
         return 1;  
@@ -235,11 +339,11 @@ int swapAuthorizationToken(QTcpSocket* authorizationSocket, std::string& strAuth
 }
 
 
-int submitCommand(QTcpSocket* commandSocket, std::string& strAuthorizationToken, std::string strCommand, std::string strCommandParameter)
+int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, std::string strCommand, std::string strCommandParameter)
 {
-    if(commandSocket== NULL || strAuthorizationToken.length() == 0)
+    if(commandcsocket== NULL || strAuthorizationToken.length() == 0)
     {
-        errorString = "submitCommand : NULL socket or empty authorization token provided";
+        errorString = "submitCommand : NULL csocket or empty authorization token provided";
         return 1;
     }
 
@@ -253,9 +357,8 @@ int submitCommand(QTcpSocket* commandSocket, std::string& strAuthorizationToken,
 
     std::string strData;
 
-    QByteArray sendData;
-    QByteArray recvData;
-
+    std::string sendData;
+    
     sendData = "<iq type=\"get\" id=\"";
     sendData.append(CONNECTION_ID);
     sendData.append("\"><oa xmlns=\"connect.logitech.com\" mime=\"vnd.logitech.harmony/vnd.logitech.harmony.engine?");
@@ -286,20 +389,11 @@ int submitCommand(QTcpSocket* commandSocket, std::string& strAuthorizationToken,
 
     }
 
-    commandSocket->write(sendData);
-    commandSocket->waitForBytesWritten(sendData.length());
-
-    commandSocket->waitForReadyRead();
-    recvData = commandSocket->readAll();
-    while(commandSocket->bytesAvailable())
-    {
-        recvData.append(commandSocket->readAll());
-        commandSocket->flush();
-    };
-
-
-    strData = ((QString) recvData).toStdString(); /* <- Expect: <iq/> */
-
+    commandcsocket->write(sendData.c_str(), sendData.length());
+    
+    memset(databuffer, 0, 1000000);
+    commandcsocket->read(databuffer, 1000000, false);
+    strData = databuffer; /* <- Expect: strData  == <iq/> */
     
     std::string iqTag = "<iq/>";
     int pos = (int)strData.find(iqTag);
@@ -310,17 +404,24 @@ int submitCommand(QTcpSocket* commandSocket, std::string& strAuthorizationToken,
         return 1;  
     }
 
-    commandSocket->waitForReadyRead();
-    recvData = commandSocket->readAll();
-    while(commandSocket->bytesAvailable())
-    {
-        recvData.append(commandSocket->readAll());
-        commandSocket->flush();
-    };
-    
-    strData = ((QString) recvData).toStdString(); 
-    resultString = strData;
+    bool bIsDataReadable = false;
+    commandcsocket->canRead(&bIsDataReadable, 1);
 
+    if(bIsDataReadable == false && strData == "<iq/>")
+    {
+        bIsDataReadable = true;
+    }
+
+    while(bIsDataReadable)
+    {
+        memset(databuffer, 0, 1000000);
+        commandcsocket->read(databuffer, 1000000, false);
+        strData.append(databuffer);
+        commandcsocket->canRead(&bIsDataReadable, 1);
+    };
+
+    
+    resultString = strData;
 
     if(strCommand == "get_current_activity_id")
     {
@@ -333,16 +434,15 @@ int submitCommand(QTcpSocket* commandSocket, std::string& strAuthorizationToken,
     }
     else if(strCommand == "get_config")
     {
-        int recvDataPrevLength = 0;
-        recvData.clear();
-        do{
-            recvDataPrevLength = recvData.length();
-            commandSocket->waitForReadyRead(1000);
-            recvData.append(commandSocket->readAll());
-            commandSocket->flush();
-        }while(recvData.length() != recvDataPrevLength);
+        commandcsocket->canRead(&bIsDataReadable, 1);
 
-        strData.append(((QString) recvData).toStdString()); 
+        while(bIsDataReadable)
+        {
+            memset(databuffer, 0, 1000000);
+            commandcsocket->read(databuffer, 1000000, false);
+            strData.append(databuffer);
+            commandcsocket->canRead(&bIsDataReadable, 1);
+        };
 
         pos = strData.find("![CDATA[{");
         if(pos != std::string::npos)
@@ -401,8 +501,6 @@ int parseConfiguration(std::string strConfiguration, std::map< std::string, std:
 
 int main(int argc, char * argv[])
 {
-    QApplication a(argc, argv);
-
     if (argc < 4)
     {
         printf("Syntax:\n");
@@ -434,7 +532,7 @@ int main(int argc, char * argv[])
         strCommandParameter = argv[5];
     }
 
-    QNetworkProxyFactory::setUseSystemConfiguration(true);
+    //QNetworkProxyFactory::setUseSystemConfiguration(true);
 
     printf("LOGITECH WEB SERVICE LOGIN     : ");
 
@@ -455,15 +553,15 @@ int main(int argc, char * argv[])
     // session authorization token
     printf("HARMONY COMMUNICATION LOGIN    : ");
 
-    QTcpSocket authorizationSocket;
-    if(connectToHarmony(strHarmonyIP, harmonyPortNumber, authorizationSocket) == 1)
+    csocket authorizationcsocket;
+    if(connectToHarmony(strHarmonyIP, harmonyPortNumber, authorizationcsocket) == 1)
     {
         printf("FAILURE\n");
         printf("ERROR : %s\n", errorString.c_str());
         return 1;
     }
 
-    if(swapAuthorizationToken(&authorizationSocket, strAuthorizationToken) == 1)
+    if(swapAuthorizationToken(&authorizationcsocket, strAuthorizationToken) == 1)
     {
         printf("FAILURE\n");
         printf("ERROR : %s\n", errorString.c_str());
@@ -479,12 +577,10 @@ int main(int argc, char * argv[])
     // Now, disconnect from the harmony and reconnect using the mangled session token 
     // as our username and password to issue a command.
 
-    authorizationSocket.close();
-
     printf("HARMONY COMMAND SUBMISSION     : ");
 
-    QTcpSocket commandSocket;
-    if(connectToHarmony(strHarmonyIP, harmonyPortNumber, commandSocket) == 1)
+    csocket commandcsocket;
+    if(connectToHarmony(strHarmonyIP, harmonyPortNumber, commandcsocket) == 1)
     {
         printf("FAILURE\n");
         printf("ERROR : %s\n", errorString.c_str());
@@ -495,7 +591,7 @@ int main(int argc, char * argv[])
     //strUserName.append("@connect.logitech.com/gatorade.");
     std::string strPassword = strAuthorizationToken;
     
-    if(startCommunication(&commandSocket, strUserName, strPassword) == 1)
+    if(startCommunication(&commandcsocket, strUserName, strPassword) == 1)
     {
         errorString = "Communication failure";
         return 1;
@@ -508,7 +604,7 @@ int main(int argc, char * argv[])
         lstrCommand = "get_config";
     }
 
-    if(submitCommand(&commandSocket, strAuthorizationToken, lstrCommand, strCommandParameter) == 1)
+    if(submitCommand(&commandcsocket, strAuthorizationToken, lstrCommand, strCommandParameter) == 1)
     {
         printf("FAILURE\n");
         printf("ERROR : %s\n", errorString.c_str());
@@ -568,3 +664,4 @@ int main(int argc, char * argv[])
 
     return 0;
 }
+
