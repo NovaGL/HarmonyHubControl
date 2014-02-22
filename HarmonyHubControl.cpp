@@ -339,7 +339,7 @@ int swapAuthorizationToken(csocket* authorizationcsocket, std::string& strAuthor
 }
 
 
-int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, std::string strCommand, std::string strCommandParameter)
+int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, std::string strCommand, std::string strCommandParameter, std::string strCommandParameterTwo)
 {
     if(commandcsocket== NULL || strAuthorizationToken.length() == 0)
     {
@@ -380,13 +380,11 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
     }
     else if (lstrCommand == "issue_action")
     {
-        // Actions are of the form:
-        //     <iq type="get" id="5e518d07-bcc2-4634-ba3d-c20f338d8927-2">
-        //         <oa xmlns="connect.logitech.com" mime="vnd.logitech.harmony/vnd.logitech.harmony.engine?holdAction">
-        //             action={"type"::"IRCommand","deviceId"::"11586428","command"::"VolumeDown"}:status=press
-        //         </oa>
-        //     </iq>
-
+        sendData.append("holdAction\">action={\"type\"::\"IRCommand\",\"deviceId\"::\"");
+        sendData.append(strCommandParameter.c_str());
+        sendData.append("\",\"command\"::\"");
+        sendData.append(strCommandParameterTwo.c_str());
+        sendData.append("\"}:status=press</oa></iq>");
     }
 
     commandcsocket->write(sendData.c_str(), sendData.length());
@@ -412,14 +410,16 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
         bIsDataReadable = true;
     }
 
-    while(bIsDataReadable)
+    if(strCommand != "issue_action")
     {
-        memset(databuffer, 0, 1000000);
-        commandcsocket->read(databuffer, 1000000, false);
-        strData.append(databuffer);
-        commandcsocket->canRead(&bIsDataReadable, 1);
-    };
-
+		while(bIsDataReadable)
+		{
+			memset(databuffer, 0, 1000000);
+			commandcsocket->read(databuffer, 1000000, false);
+			strData.append(databuffer);
+			commandcsocket->canRead(&bIsDataReadable, 1);
+		};
+	}
     
     resultString = strData;
 
@@ -450,7 +450,7 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
             resultString = "Logitech Harmony Configuration : \n" + strData.substr(pos + 9);
         }
     }
-    else if (strCommand == "start_activity")
+    else if (strCommand == "start_activity" || strCommand == "issue_action")
     {
         resultString = "";
     }
@@ -509,6 +509,7 @@ int main(int argc, char * argv[])
         printf("        list_activities\n");
         printf("        get_current_activity_id\n");
         printf("        start_activity [ID]\n");
+        printf("        issue_action [deviceId] [command]\n");
         printf("        list_devices\n");
         printf("        get_config\n");
         printf("\n");
@@ -520,6 +521,8 @@ int main(int argc, char * argv[])
     std::string strHarmonyIP = argv[3];
 	std::string strCommand;
     std::string strCommandParameter;
+    std::string strCommandParameterTwo;
+    
     int harmonyPortNumber = HARMONY_COMMUNICATION_PORT;
 
     // User requested an action to be performed
@@ -527,9 +530,14 @@ int main(int argc, char * argv[])
     {
         strCommand = argv[4];
     }
-    if(argc==6)
+    if(argc>=6)
     {
         strCommandParameter = argv[5];
+    }
+
+    if(argc==7)
+    {
+        strCommandParameterTwo = argv[6];
     }
 
     //QNetworkProxyFactory::setUseSystemConfiguration(true);
@@ -604,7 +612,7 @@ int main(int argc, char * argv[])
         lstrCommand = "get_config";
     }
 
-    if(submitCommand(&commandcsocket, strAuthorizationToken, lstrCommand, strCommandParameter) == 1)
+    if(submitCommand(&commandcsocket, strAuthorizationToken, lstrCommand, strCommandParameter, strCommandParameterTwo) == 1)
     {
         printf("FAILURE\n");
         printf("ERROR : %s\n", errorString.c_str());

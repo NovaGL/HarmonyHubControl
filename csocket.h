@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <asm/errno.h>
 #include <unistd.h>
+#include <cstring>
 #endif
 
 #include <stdio.h>
