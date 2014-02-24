@@ -36,7 +36,7 @@ csocket::csocket() : m_socketState(CLOSED),
 #endif
     }
      
-    m_socket = NULL;
+    m_socket = 0;
 }
 
 

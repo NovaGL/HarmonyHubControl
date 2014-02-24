@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <string>
+#include <iostream>
 #include <map>
 #include "csocket.h"
 
@@ -32,7 +33,10 @@ std::string resultString;
 #define HARMONY_COMMUNICATION_PORT 5222
 #define CONNECTION_ID "12345678-1234-5678-1234-123456789012-1"
 
-#include <iostream>
+#ifdef WIN32
+#define sprintf sprintf_s
+#endif
+
 
 static const std::string base64_chars = 
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -339,7 +343,7 @@ int swapAuthorizationToken(csocket* authorizationcsocket, std::string& strAuthor
 }
 
 
-int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, std::string strCommand, std::string strCommandParameter, std::string strCommandParameterTwo)
+int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, std::string strCommand, std::string strCommandParameterPrimary, std::string strCommandParameterSecondary)
 {
     if(commandcsocket== NULL || strAuthorizationToken.length() == 0)
     {
@@ -375,15 +379,15 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
     else if (lstrCommand == "start_activity")
     {
         sendData.append("startactivity\">activityId=");
-        sendData.append(strCommandParameter.c_str());
+        sendData.append(strCommandParameterPrimary.c_str());
         sendData.append(":timestamp=0</oa></iq>");
     }
-    else if (lstrCommand == "issue_action")
+    else if (lstrCommand == "issue_device_command")
     {
         sendData.append("holdAction\">action={\"type\"::\"IRCommand\",\"deviceId\"::\"");
-        sendData.append(strCommandParameter.c_str());
+        sendData.append(strCommandParameterPrimary.c_str());
         sendData.append("\",\"command\"::\"");
-        sendData.append(strCommandParameterTwo.c_str());
+        sendData.append(strCommandParameterSecondary.c_str());
         sendData.append("\"}:status=press</oa></iq>");
     }
 
@@ -410,7 +414,7 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
         bIsDataReadable = true;
     }
 
-    if(strCommand != "issue_action")
+    if(strCommand != "issue_device_command")
     {
 		while(bIsDataReadable)
 		{
@@ -450,7 +454,7 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
             resultString = "Logitech Harmony Configuration : \n" + strData.substr(pos + 9);
         }
     }
-    else if (strCommand == "start_activity" || strCommand == "issue_action")
+    else if (strCommand == "start_activity" || strCommand == "issue_device_command")
     {
         resultString = "";
     }
@@ -509,7 +513,7 @@ int main(int argc, char * argv[])
         printf("        list_activities\n");
         printf("        get_current_activity_id\n");
         printf("        start_activity [ID]\n");
-        printf("        issue_action [deviceId] [command]\n");
+        printf("        issue_device_command [deviceId] [command]\n");
         printf("        list_devices\n");
         printf("        get_config\n");
         printf("\n");
@@ -520,8 +524,8 @@ int main(int argc, char * argv[])
     std::string strUserPassword = argv[2];
     std::string strHarmonyIP = argv[3];
 	std::string strCommand;
-    std::string strCommandParameter;
-    std::string strCommandParameterTwo;
+    std::string strCommandParameterPrimary;
+    std::string strCommandParameterSecondary;
     
     int harmonyPortNumber = HARMONY_COMMUNICATION_PORT;
 
@@ -532,15 +536,14 @@ int main(int argc, char * argv[])
     }
     if(argc>=6)
     {
-        strCommandParameter = argv[5];
+        strCommandParameterPrimary = argv[5];
     }
 
     if(argc==7)
     {
-        strCommandParameterTwo = argv[6];
+        strCommandParameterSecondary = argv[6];
     }
 
-    //QNetworkProxyFactory::setUseSystemConfiguration(true);
 
     printf("LOGITECH WEB SERVICE LOGIN     : ");
 
@@ -612,7 +615,7 @@ int main(int argc, char * argv[])
         lstrCommand = "get_config";
     }
 
-    if(submitCommand(&commandcsocket, strAuthorizationToken, lstrCommand, strCommandParameter, strCommandParameterTwo) == 1)
+    if(submitCommand(&commandcsocket, strAuthorizationToken, lstrCommand, strCommandParameterPrimary, strCommandParameterSecondary) == 1)
     {
         printf("FAILURE\n");
         printf("ERROR : %s\n", errorString.c_str());

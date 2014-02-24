@@ -70,7 +70,7 @@ Usage
 
 The command line for HarmonyHubControl is as follows:
 
-    HarmonyHubControl.exe [email] [password] [harmony_ip] [command (optional)]\n");
+    HarmonyHubControl.exe [email] [password] [harmony_ip] [command (optional)] [primary_parameter (optional)] [secondary_parameter (optional)]\n");
     
 where the [email] and [password] parameters are the login credentials used to log 
 into your Logitech Harmony account to update the device configuration.  These are
@@ -85,6 +85,7 @@ also the same credentials used with the Harmony app.
 	list_devices
 	list_activities
 	start_activity [ID]
+        issue_device_command [DEVICE_ID] [DEVICE_COMMAND]
 	get_config
 
 
@@ -115,5 +116,4 @@ Visual Studio or Linux gcc development environment.
 To-do
 --------------------
 
-Finish the "issue_command" interface to allow individual commands to be sent to devices.
 Re-organize the code into a library
