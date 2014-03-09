@@ -45,8 +45,7 @@ void log(const char* message, bool bQuiet)
         return;
     }
 
-    printf(message);
-    printf("\n");
+    printf("%s\n", message);
 }
 
 class Action
