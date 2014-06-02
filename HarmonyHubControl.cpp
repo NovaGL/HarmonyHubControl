@@ -647,17 +647,19 @@ int parseConfiguration(const std::string& strConfiguration, std::map< std::strin
         if(activityStart != std::string::npos )
         {
             std::string activityString = strConfiguration.substr(activityStart+1, activityTypeDisplayNameStartPos - activityStart-1);
+            
             std::string labelTag = "\"label\":\"";
-            int labelStartPos = activityString.find(labelTag);
-            
             std::string idTag = "\",\"id\":\"";
+            int labelStartPos = activityString.find(labelTag);
             int idStartPos = activityString.find(idTag, labelStartPos);
-            
-
-            // we definitely have an activity
+                        
+            // Try to pick up the label
             std::string strActivityLabel = activityString.substr(labelStartPos+9, idStartPos-labelStartPos-9);
             idStartPos += idTag.length();
+
+            // Try to pick up the ID
             std::string strActivityID = activityString.substr(idStartPos, activityString.length() - idStartPos);
+
             mapActivities.insert(std::map< std::string, std::string>::value_type(strActivityID, strActivityLabel));
         }
         activityTypeDisplayNameStartPos = strConfiguration.find(activityTypeDisplayNameTag, activityTypeDisplayNameStartPos+activityTypeDisplayNameTag.length());
