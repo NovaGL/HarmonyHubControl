@@ -517,9 +517,13 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
             }
         }
     }
-    else if(strCommand == "get_config")
+    else if(strCommand == "get_config" || strCommand == "get_config_raw")
     {
         commandcsocket->canRead(&bIsDataReadable, 1);
+
+#ifndef WIN32
+        bIsDataReadable = true;
+#endif
 
         while(bIsDataReadable)
         {
@@ -527,7 +531,8 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
             commandcsocket->read(databuffer, 1000000, false);
             strData.append(databuffer);
             commandcsocket->canRead(&bIsDataReadable, 1);
-        };
+        }
+        
 
         pos = strData.find("![CDATA[{");
         if(pos != std::string::npos)
@@ -634,25 +639,28 @@ int parseControlGroup(const std::string& strControlGroup, std::vector<Function>&
 
 int parseConfiguration(const std::string& strConfiguration, std::map< std::string, std::string >& mapActivities, std::vector< Device >& vecDevices)
 {
-    int suggestedDisplayStartPos = strConfiguration.find("suggestedDisplay");
-    while(suggestedDisplayStartPos != std::string::npos)
+    std::string activityTypeDisplayNameTag = "\",\"activityTypeDisplayName\":\"";
+    int activityTypeDisplayNameStartPos = strConfiguration.find(activityTypeDisplayNameTag);
+    while(activityTypeDisplayNameStartPos != std::string::npos)
     {
-        int labelStartPos = strConfiguration.find("\"label\":\"", suggestedDisplayStartPos);
-
-        if(labelStartPos != std::string::npos && labelStartPos < suggestedDisplayStartPos + 50)
+        int activityStart = strConfiguration.rfind("{", activityTypeDisplayNameStartPos);
+        if(activityStart != std::string::npos )
         {
-            // We may have an activity
-            int idStartPos = strConfiguration.find("\",\"id\":", labelStartPos);
-            int activityTypeDNPos = strConfiguration.find("\",\"activityTypeDisplayName\"", idStartPos);
-            if(activityTypeDNPos < idStartPos+20)
-            {
-                // we definitely have an activity
-                std::string strActivityLabel = strConfiguration.substr(labelStartPos+9, idStartPos-labelStartPos-9);
-                std::string strActivityID = strConfiguration.substr(idStartPos+8, activityTypeDNPos-idStartPos-8);
-                mapActivities.insert(std::map< std::string, std::string>::value_type(strActivityID, strActivityLabel));
-            }
+            std::string activityString = strConfiguration.substr(activityStart+1, activityTypeDisplayNameStartPos - activityStart-1);
+            std::string labelTag = "\"label\":\"";
+            int labelStartPos = activityString.find(labelTag);
+            
+            std::string idTag = "\",\"id\":\"";
+            int idStartPos = activityString.find(idTag, labelStartPos);
+            
+
+            // we definitely have an activity
+            std::string strActivityLabel = activityString.substr(labelStartPos+9, idStartPos-labelStartPos-9);
+            idStartPos += idTag.length();
+            std::string strActivityID = activityString.substr(idStartPos, activityString.length() - idStartPos);
+            mapActivities.insert(std::map< std::string, std::string>::value_type(strActivityID, strActivityLabel));
         }
-        suggestedDisplayStartPos = strConfiguration.find("suggestedDisplay", suggestedDisplayStartPos+16);
+        activityTypeDisplayNameStartPos = strConfiguration.find(activityTypeDisplayNameTag, activityTypeDisplayNameStartPos+activityTypeDisplayNameTag.length());
     }
 
     // Search for devices and commands
