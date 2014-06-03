@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <map>
 #include <vector>
 #include "csocket.h"
@@ -32,6 +33,7 @@ std::string resultString;
 #define LOGITECH_AUTH_HOSTNAME "svcs.myharmony.com"
 #define LOGITECH_AUTH_PATH "/CompositeSecurityServices/Security.svc/json/GetUserAuthToken"
 #define HARMONY_COMMUNICATION_PORT 5222
+#define HARMONY_HUB_AUTHORIZATION_TOKEN_FILENAME "HarmonyHub.AuthorizationToken"
 #define CONNECTION_ID "12345678-1234-5678-1234-123456789012-1"
 
 #ifdef WIN32
@@ -384,7 +386,7 @@ int swapAuthorizationToken(csocket* authorizationcsocket, std::string& strAuthor
     }
 
     bool bIsDataReadable = false;
-    authorizationcsocket->canRead(&bIsDataReadable, 1);
+    authorizationcsocket->canRead(&bIsDataReadable, 0.1);
     if(!bIsDataReadable && strData == "<iq/>")
     {
         bIsDataReadable = true;
@@ -395,7 +397,7 @@ int swapAuthorizationToken(csocket* authorizationcsocket, std::string& strAuthor
         memset(databuffer, 0, 1000000);
         authorizationcsocket->read(databuffer, 1000000, false);
         strData.append(databuffer);
-        authorizationcsocket->canRead(&bIsDataReadable, 1);
+        authorizationcsocket->canRead(&bIsDataReadable, 0.1);
     };
 
     // Parse the session authorization token from the response
@@ -484,7 +486,7 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
     }
 
     bool bIsDataReadable = false;
-    commandcsocket->canRead(&bIsDataReadable, 1);
+    commandcsocket->canRead(&bIsDataReadable, 0.1);
 
     if(bIsDataReadable == false && strData == "<iq/>")
     {
@@ -498,7 +500,7 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
 			memset(databuffer, 0, 1000000);
 			commandcsocket->read(databuffer, 1000000, false);
 			strData.append(databuffer);
-			commandcsocket->canRead(&bIsDataReadable, 1);
+			commandcsocket->canRead(&bIsDataReadable, 0.1);
 		};
 	}
     
@@ -519,7 +521,7 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
     }
     else if(strCommand == "get_config" || strCommand == "get_config_raw")
     {
-        commandcsocket->canRead(&bIsDataReadable, 1);
+        commandcsocket->canRead(&bIsDataReadable, 0.1);
 
 #ifndef WIN32
         bIsDataReadable = true;
@@ -530,7 +532,7 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
             memset(databuffer, 0, 1000000);
             commandcsocket->read(databuffer, 1000000, false);
             strData.append(databuffer);
-            commandcsocket->canRead(&bIsDataReadable, 1);
+            commandcsocket->canRead(&bIsDataReadable, 0.1);
         }
         
 
@@ -753,6 +755,39 @@ int parseConfiguration(const std::string& strConfiguration, std::map< std::strin
     return 0;
 }
 
+
+const std::string ReadAuthorizationTokenFile()
+{
+    std::string strAuthorizationToken;
+    std::ifstream AuthorizationTokenFileStream (HARMONY_HUB_AUTHORIZATION_TOKEN_FILENAME);
+    if (!AuthorizationTokenFileStream.is_open())
+    {
+        return strAuthorizationToken;
+    }
+
+    getline (AuthorizationTokenFileStream,strAuthorizationToken);
+
+    AuthorizationTokenFileStream.close();
+    
+    return strAuthorizationToken;
+}
+
+
+int WriteAuthorizationTokenFile(const std::string& strAuthorizationToken)
+{
+    std::ofstream AuthorizationTokenFileStream;
+    AuthorizationTokenFileStream.open(HARMONY_HUB_AUTHORIZATION_TOKEN_FILENAME);
+    if(!AuthorizationTokenFileStream.is_open())
+    {
+        return 1;
+    }
+    AuthorizationTokenFileStream << strAuthorizationToken;
+    AuthorizationTokenFileStream.close();
+
+    return 0;
+}
+
+
 int main(int argc, char * argv[])
 {
     if (argc < 4)
@@ -811,41 +846,70 @@ int main(int argc, char * argv[])
         }
     }
 
-    
-    
-
-    // Log into the logitech web service to retrieve the login authorization token
-    std::string strAuthorizationToken;
-    if(harmonyWebServiceLogin(strUserEmail, strUserPassword, strAuthorizationToken) == 1)
-    {
-        log("LOGITECH WEB SERVICE LOGIN     : FAILURE", false);
-        printf("ERROR : %s\n", errorString.c_str());
-        return 1;
-    }
-    log("LOGITECH WEB SERVICE LOGIN     : SUCCESS", bQuietMode);
-    
+    // Read the token
+    std::string strAuthorizationToken = ReadAuthorizationTokenFile();
 
     //printf("\nLogin Authorization Token is: %s\n\n", strAuthorizationToken.c_str());
 
+    bool bAuthorizationComplete = false;
 
-    // Log into the harmony hub to convert the login authorization token for a 
-    // session authorization token
-    
-    
-    csocket authorizationcsocket;
-    if(connectToHarmony(strHarmonyIP, harmonyPortNumber, authorizationcsocket) == 1)
+    if(strAuthorizationToken.length() > 0)
     {
-        log("HARMONY COMMUNICATION LOGIN    : FAILURE", false);
-        printf("ERROR : %s\n", errorString.c_str());
-        return 1;
+        csocket authorizationcsocket;
+        if(connectToHarmony(strHarmonyIP, harmonyPortNumber, authorizationcsocket) == 1)
+        {
+            log("HARMONY COMMUNICATION LOGIN    : FAILURE", false);
+            printf("ERROR : %s\n", errorString.c_str());
+            return 1;
+        }
+
+        if(swapAuthorizationToken(&authorizationcsocket, strAuthorizationToken) == 0)
+        {
+            // Authorization Token found in the file worked.  
+            // Bypass authorization through Logitech's servers.
+            log("LOGITECH WEB SERVICE LOGIN     : BYPASSED", bQuietMode);
+
+            bAuthorizationComplete = true;
+        }
+        
     }
 
-
-    if(swapAuthorizationToken(&authorizationcsocket, strAuthorizationToken) == 1)
+    
+    if(bAuthorizationComplete == false)
     {
-        log("HARMONY COMMUNICATION LOGIN    : FAILURE", false);
-        printf("ERROR : %s\n", errorString.c_str());
-        return 1;
+        // Log into the Logitech Web Service to retrieve the login authorization token
+        if(harmonyWebServiceLogin(strUserEmail, strUserPassword, strAuthorizationToken) == 1)
+        {
+            log("LOGITECH WEB SERVICE LOGIN     : FAILURE", false);
+            printf("ERROR : %s\n", errorString.c_str());
+            return 1;
+        }
+        log("LOGITECH WEB SERVICE LOGIN     : SUCCESS", bQuietMode);
+
+        //printf("\nLogin Authorization Token is: %s\n\n", strAuthorizationToken.c_str());
+
+        // Write the Authorization Token to an Authorization Token file to bypass this step
+        // on future sessions
+        WriteAuthorizationTokenFile(strAuthorizationToken);
+
+        // Log into the harmony hub to convert the login authorization token for a 
+        // session authorization token
+    
+        csocket authorizationcsocket;
+        if(connectToHarmony(strHarmonyIP, harmonyPortNumber, authorizationcsocket) == 1)
+        {
+            log("HARMONY COMMUNICATION LOGIN    : FAILURE", false);
+            printf("ERROR : %s\n", errorString.c_str());
+            return 1;
+        }
+
+
+        if(swapAuthorizationToken(&authorizationcsocket, strAuthorizationToken) == 1)
+        {
+            log("HARMONY COMMUNICATION LOGIN    : FAILURE", false);
+            printf("ERROR : %s\n", errorString.c_str());
+            return 1;
+        }
     }
 
     log("HARMONY COMMUNICATION LOGIN    : SUCCESS", bQuietMode);
