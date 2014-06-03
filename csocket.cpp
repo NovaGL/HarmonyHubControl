@@ -1,5 +1,6 @@
 #include "csocket.h"
 
+
 #ifdef WIN32
 #include <io.h>
 #else
@@ -206,11 +207,12 @@ int csocket::canRead( bool* readyToRead, float waitTime )
             (waitTime - (float)timeout.tv_sec));
     }
 
+    
 #ifdef WIN32
     nfds = m_socket+1;
 #endif
-    int n = select(nfds, &fds, NULL, NULL, &timeout);
 
+    int n = select(nfds, &fds, NULL, NULL, &timeout);
     if ( n < 0 ) 
     {
         m_socketState = ERRORED;
@@ -220,7 +222,6 @@ int csocket::canRead( bool* readyToRead, float waitTime )
     if (n == 1) 
     {
         *readyToRead = true;
-
         return SUCCESS;
     }
 
