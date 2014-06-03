@@ -72,14 +72,15 @@ int csocket::resolveHost(const std::string& szRemoteHostName, struct hostent** p
 #endif
     }
 
-    unsigned long uhostname = inet_addr ( szRemoteHostName.c_str() );
-    *pHostEnt = gethostbyaddr( reinterpret_cast<char *>(&uhostname), 
-        sizeof(unsigned long),
-        AF_INET);
+    *pHostEnt = gethostbyname( szRemoteHostName.c_str() );
 
     if (*pHostEnt == NULL) 
     {
-        *pHostEnt = gethostbyname( szRemoteHostName.c_str() );
+        unsigned long uhostname = inet_addr ( szRemoteHostName.c_str() );
+        *pHostEnt = gethostbyaddr( reinterpret_cast<char *>(&uhostname), 
+            sizeof(unsigned long),
+            AF_INET);
+
         if (*pHostEnt == NULL)
         {
             return FAILURE;
@@ -155,10 +156,6 @@ int csocket::connect( const char* remoteHost, unsigned int remotePort )
     int set = 1;
     setsockopt(m_socket, IPPROTO_TCP, TCP_NODELAY,  (char*) &set, sizeof(set) );
 #endif
-
-    resolveHost(m_strRemoteHost, &pHostEnt);
-    if (!pHostEnt)
-        return FAILURE;
 
     m_remoteSocketAddr.sin_family = pHostEnt->h_addrtype;
 
