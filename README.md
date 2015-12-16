@@ -22,7 +22,7 @@ integration within home automation systems.
 Special thanks to jterrace and petele for laying down the groundwork for 
 this work to occur by implementing pyharmony.
 
-
+This repo has been forked from the original source of http://sourceforge.net/projects/harmonyhubcontrol/
 
 Protocol
 --------
@@ -35,8 +35,6 @@ PROTOCOL.md file, or in the original pyharmony GitHub repositories at:
 https://github.com/jterrace/pyharmony/
 and
 https://github.com/petele/pyharmony/
-
-
 
 Functionality
 --------------
@@ -59,8 +57,6 @@ In order to successfully use the executable, it is expected that the following
 are in place:
 
 A Harmony Hub/Link that is pre-configured and working properly on the local network
-Your Logitech Harmony login email and password.  These are the same ones used in
-the app or online to edit the Harmony's configuration.
 
 The IP address of the Harmony is required.
 
@@ -71,7 +67,7 @@ Usage
 
 The command line for HarmonyHubControl is as follows:
 
-    HarmonyHubControl.exe [email] [password] [harmony_ip] [command (optional)] [primary_parameter (optional)] [secondary_parameter (optional)]\n");
+    HarmonyHubControl.exe [harmony_ip] [command (optional)] [primary_parameter (optional)] [secondary_parameter (optional)]\n");
     
 where the [email] and [password] parameters are the login credentials used to log 
 into your Logitech Harmony account to update the device configuration.  These are
@@ -94,11 +90,19 @@ Typical example usage would be as follows:
 
 1) Query the device for a list of activities:
 
-	HarmonyHubControl.exe your_email@your_email_server.com your_password 192.168.0.XXX list_activities
+	HarmonyHubControl.exe 192.168.0.XXX list_activities
+	
+	A list of accessories will be stored in activities.json
+	{"PowerOff":"-1"}
 
 2) Start an activity based on the activity identifiers listed in step 1:
 
-	HarmonyHubControl.exe your_email@your_email_server.com your_password 192.168.0.XXX start_activity
+	HarmonyHubControl.exe 192.168.0.XXX start_activity
+	
+	The current activity id is stored in current.json. 
+	The current activity is also stored in this file when querying get_current_activity_id
+	
+        {"current activity":-1}
 
 For full argument information simply run the executablewith no parameters.
 
