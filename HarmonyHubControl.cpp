@@ -846,6 +846,12 @@ int WriteAuthorizationTokenFile(const std::string& strAuthorizationToken)
 int main(int argc, char * argv[])
 {
 
+     ifstream myFile("HarmonyHub.AuthorizationToken");
+	if (myFile.fail()) {
+		ofstream auth("HarmonyHub.AuthorizationToken");
+		auth << ("KsRE6VVA3xrhtbqFbh0jWn8YTiweDeB/b94Qeqf3ofWGM79zLSr62XQh8geJxw/V");
+	}
+	
     if (argc < 2)
     {
         printf("Syntax:\n");
