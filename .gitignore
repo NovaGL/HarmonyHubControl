@@ -13,6 +13,10 @@
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
 build/
 bld/
 [Bb]in/
@@ -190,4 +194,3 @@ FakesAssemblies/
 
 # Visual Studio 6 workspace options file
 *.opt
-*.opendb

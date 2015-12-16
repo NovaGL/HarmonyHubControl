@@ -253,7 +253,7 @@ int harmonyWebServiceLogin(std::string strUserEmail, std::string strPassword, st
     }
 
     char contentLength[32];
-	sprintf(contentLength, "%d", static_cast<int>(strJSONText.length()));
+    sprintf( contentLength, "%d", strJSONText.length() );
 
     std::string strHttpRequestText;
 
@@ -380,7 +380,7 @@ int swapAuthorizationToken(csocket* authorizationcsocket, std::string& strAuthor
     sendData.append(":name=foo#iOS6.0.1#iPhone</oa></iq>");
 
     std::string strIdentityTokenTag = "identity=";
-	int pos = static_cast<int>(std::string::npos);
+    int pos = std::string::npos;
     
     authorizationcsocket->write(sendData.c_str(), sendData.length());
     
@@ -845,12 +845,13 @@ int WriteAuthorizationTokenFile(const std::string& strAuthorizationToken)
 
 int main(int argc, char * argv[])
 {
-	ifstream myFile("HarmonyHub.AuthorizationToken");
+
+     ifstream myFile("HarmonyHub.AuthorizationToken");
 	if (myFile.fail()) {
 		ofstream auth("HarmonyHub.AuthorizationToken");
 		auth << ("KsRE6VVA3xrhtbqFbh0jWn8YTiweDeB/b94Qeqf3ofWGM79zLSr62XQh8geJxw/V");
 	}
-
+	
     if (argc < 2)
     {
         printf("Syntax:\n");
