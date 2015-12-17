@@ -13,6 +13,10 @@
 #include <sys/errno.h>
 #include <unistd.h>
 #endif
+#if __APPLE__
+#include <netdb.h>
+#include <arpa/inet.h>
+#endif
 
 #undef INVALID_SOCKET
 #define INVALID_SOCKET  (unsigned int)(~0)
@@ -249,7 +253,7 @@ int csocket::read( char* pDataBuffer, unsigned int numBytesToRead, bool bReadAll
 #ifdef WIN32
         numBytesRead = recv( m_socket, pDataBuffer, numBytesRemaining, 0 );
 #else
-        numBytesRead = ::read( m_socket, pDataBuffer, numBytesRemaining);
+        numBytesRead = static_cast<int>(::read( m_socket, pDataBuffer, numBytesRemaining));
 #endif
 
         if (numBytesRead < 0)
@@ -298,7 +302,7 @@ int csocket::write( const char* pDataBuffer, unsigned int numBytesToWrite )
     while (numBytesRemaining  > 0) 
     {
 #ifdef WIN32
-        numBytestWritten = send ( m_socket, pDataBuffer, numBytesRemaining , 0 );
+        numBytestWritten= static_cast<int>(::write( m_socket, pDataBuffer, numBytesRemaining ));
 #else
         numBytestWritten= ::write( m_socket, pDataBuffer, numBytesRemaining );
 #endif
