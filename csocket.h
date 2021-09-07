@@ -1,7 +1,7 @@
 #ifndef CSOCKET_H
 #define CSOCKET_H
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <winsock2.h>
 #include <windows.h>
 #else
@@ -43,7 +43,7 @@ public:
 private:
 
 
-#ifdef WIN32
+#ifdef _WIN32
     SOCKET              m_socket;
 #else
     int                 m_socket;

@@ -1,8 +1,9 @@
 #include "csocket.h"
 
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <io.h>
+#pragma comment(lib, "Ws2_32.lib")
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -31,7 +32,7 @@ csocket::csocket() : m_socketState(CLOSED),
 {
     if ( ! s_bSocketsInitialized )
     {
-#ifdef WIN32
+#ifdef _WIN32
         WORD socketVersion;  
         WSADATA socketData; 
         int err; 
@@ -49,7 +50,7 @@ csocket::~csocket()
 {
     if ( m_socketState != csocket::CLOSED )
     {
-#ifdef WIN32
+#ifdef _WIN32
         closesocket(m_socket);
 #else
         ::close(m_socket);
@@ -67,7 +68,7 @@ int csocket::resolveHost(const std::string& szRemoteHostName, struct hostent** p
 
     if ( ! s_bSocketsInitialized )
     {
-#ifdef WIN32
+#ifdef _WIN32
         WORD wVersionRequested;  
         WSADATA wsaData; 
         int err; 
@@ -121,7 +122,7 @@ int csocket::connect( const char* remoteHost, unsigned int remotePort )
     m_remoteSocketAddr.sin_port = htons(m_remotePort);
 
 
-#ifdef WIN32
+#ifdef _WIN32
     m_socket = WSASocket(AF_INET, SOCK_STREAM, 
         IPPROTO_TCP, 0 , 0 , 0);
 
@@ -157,7 +158,7 @@ int csocket::connect( const char* remoteHost, unsigned int remotePort )
         return FAILURE;
     }
 
-#ifdef WIN32 
+#ifdef _WIN32 
     int set = 1;
     setsockopt(m_socket, IPPROTO_TCP, TCP_NODELAY,  (char*) &set, sizeof(set) );
 #endif
@@ -212,7 +213,7 @@ int csocket::canRead( bool* readyToRead, float waitTime )
     }
 
     
-#ifdef WIN32
+#ifdef _WIN32
     nfds = m_socket+1;
 #endif
 
@@ -250,7 +251,7 @@ int csocket::read( char* pDataBuffer, unsigned int numBytesToRead, bool bReadAll
 
     do 
     {
-#ifdef WIN32
+#ifdef _WIN32
         numBytesRead = recv( m_socket, pDataBuffer, numBytesRemaining, 0 );
 #else
         numBytesRead = static_cast<int>(::read( m_socket, pDataBuffer, numBytesRemaining));
@@ -260,7 +261,7 @@ int csocket::read( char* pDataBuffer, unsigned int numBytesToRead, bool bReadAll
         {
             if ( bReadAll ) 
             {
-#ifdef WIN32
+#ifdef _WIN32
                 Sleep(BLOCK_RETRY_INTERVAL_MSECS);
 #else
                 usleep(BLOCK_RETRY_INTERVAL_MSECS * 1000);
@@ -301,8 +302,8 @@ int csocket::write( const char* pDataBuffer, unsigned int numBytesToWrite )
 
     while (numBytesRemaining  > 0) 
     {
-#ifdef WIN32
-        numBytestWritten= static_cast<int>(::write( m_socket, pDataBuffer, numBytesRemaining ));
+#ifdef _WIN32
+        numBytestWritten = send( m_socket, pDataBuffer, numBytesRemaining, 0 );
 #else
         numBytestWritten= ::write( m_socket, pDataBuffer, numBytesRemaining );
 #endif
