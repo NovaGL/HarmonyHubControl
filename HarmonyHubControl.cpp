@@ -39,7 +39,7 @@ std::string resultString;
 #define HARMONY_HUB_AUTHORIZATION_TOKEN_FILENAME "HarmonyHub.AuthorizationToken"
 #define CONNECTION_ID "12345678-1234-5678-1234-123456789012-1"
 
-#ifdef WIN32
+#ifdef _WIN32
 #define sprintf sprintf_s
 #endif
 
@@ -570,7 +570,7 @@ int submitCommand(csocket* commandcsocket, std::string& strAuthorizationToken, s
     {
         commandcsocket->canRead(&bIsDataReadable, 0.3f);
 
-#ifndef WIN32
+#ifndef _WIN32
         bIsDataReadable = true;
 #endif
 
@@ -851,7 +851,7 @@ int main(int argc, char * argv[])
     if (argc < 2)
     {
 	      const char *suffix = "";
-	#if WIN32
+	#if _WIN32
         	suffix = ".exe";
 	#endif
         printf("Syntax:\n");
